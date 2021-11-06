@@ -427,8 +427,10 @@ type
     Windows1: TMenuItem;
     Help1: TMenuItem;
     menuAbout: TMenuItem;
-    N3: TMenuItem;
-    HowtoUseHelp1: TMenuItem;
+    HelpZyLO: TMenuItem;
+		N3: TMenuItem;
+    N5: TMenuItem;
+		HowtoUseHelp1: TMenuItem;
     SearchforHelpOn1: TMenuItem;
     Contents1: TMenuItem;
     Score1: TMenuItem;
@@ -765,7 +767,8 @@ type
     procedure Load1Click(Sender: TObject);
     procedure SortbyTime1Click(Sender: TObject);
     procedure menuAboutClick(Sender: TObject);
-    procedure DateEditChange(Sender: TObject);
+    procedure HelpZyLOClick(Sender: TObject);
+		procedure DateEditChange(Sender: TObject);
     procedure TimeEditDblClick(Sender: TObject);
     procedure FormResize(Sender: TObject);
     procedure menuOptionsClick(Sender: TObject);
@@ -4151,6 +4154,11 @@ end;
 procedure TMainForm.HelpAbout(Sender: TObject);
 begin
    menuAbout.Click();
+end;
+
+procedure TMainForm.HelpZyLOClick(Sender: TObject);
+begin
+   UPluginManager.BrowseURL(UPluginManager.URL_MANUAL);
 end;
 
 procedure TMainForm.ConsoleRigBandSet(B: TBand);
