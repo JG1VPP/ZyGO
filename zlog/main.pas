@@ -428,9 +428,9 @@ type
     Help1: TMenuItem;
     menuAbout: TMenuItem;
     HelpZyLO: TMenuItem;
-		N3: TMenuItem;
+    N3: TMenuItem;
     N5: TMenuItem;
-		HowtoUseHelp1: TMenuItem;
+    HowtoUseHelp1: TMenuItem;
     SearchforHelpOn1: TMenuItem;
     Contents1: TMenuItem;
     Score1: TMenuItem;
@@ -768,7 +768,7 @@ type
     procedure SortbyTime1Click(Sender: TObject);
     procedure menuAboutClick(Sender: TObject);
     procedure HelpZyLOClick(Sender: TObject);
-		procedure DateEditChange(Sender: TObject);
+    procedure DateEditChange(Sender: TObject);
     procedure TimeEditDblClick(Sender: TObject);
     procedure FormResize(Sender: TObject);
     procedure menuOptionsClick(Sender: TObject);
@@ -6429,7 +6429,7 @@ end;
 
 procedure TMainForm.menuPluginManagerClick(Sender: TObject);
 begin
-	 MarketForm.Show;
+   MarketForm.Show;
 end;
 
 procedure TMainForm.CWFMouseDown(Sender: TObject; Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
