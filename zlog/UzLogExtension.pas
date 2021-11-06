@@ -100,6 +100,17 @@ var
 
 const
 	ResponseCapacity = 256;
+	KEY_LIST = 'items';
+	KEY_DLLS = 'DLLs';
+	KEY_PATH = 'path';
+	KEY_ZYLO = 'zylo';
+
+(*enable/remove DLLs*)
+function LoadIniFile: TIniFile;
+procedure InstallDLL(path: string);
+procedure DisableDLL(path: string);
+function CanInstallDLL(path: string): boolean;
+function CanDisableDLL(path: string): boolean;
 
 (*zLog event handlers*)
 procedure zyloRuntimeLaunch;
@@ -304,20 +315,95 @@ begin
 	end;
 end;
 
+function LoadIniFile: TIniFile;
+begin
+	Result := TIniFile.Create(ChangeFileExt(Application.ExeName, '.ini'));
+end;
+
+function GetDLLsINI: TList<String>;
+var
+	init: TIniFile;
+	text: string;
+begin
+	init := LoadIniFile;
+	text := init.ReadString(KEY_ZYLO, KEY_DLLS, '');
+	Result := TList<String>.Create;
+	Result.AddRange(text.Split([',']));
+	init.Free;
+end;
+
+procedure SetDLLsINI(list: TList<String>);
+var
+	init: TIniFile;
+	text: TStringList;
+	item: string;
+begin
+	init := LoadIniFile;
+	text := TStringList.Create;
+	for item in list do text.Append(item);
+	init.WriteString(KEY_ZYLO, KEY_DLLS, text.DelimitedText);
+	init.Free;
+end;
+
+procedure InstallDLL(path: string);
+var
+	list: TList<String>;
+begin
+	MainForm.actionBackupExecute(MainForm);
+	list := GetDLLsINI;
+	if not list.Contains(path) then begin
+		list.Add(path);
+		SetDLLsINI(list);
+	end;
+	if not Rules.ContainsKey(path) then TDLL.Create(path);
+	list.Free;
+end;
+
+procedure DisableDLL(path: string);
+var
+	list: TList<String>;
+begin
+	list := GetDLLsINI;
+	list.Remove(path);
+	SetDLLsINI(list);
+	list.Free;
+end;
+
+procedure DisableAll;
+var
+	list: TList<String>;
+begin
+	list := TList<String>.Create;
+	SetDLLsINI(list);
+	list.Free;
+end;
+
+function CanInstallDLL(path: string): boolean;
+begin
+	Result := not CanDisableDLL(path);
+end;
+
+function CanDisableDLL(path: string): boolean;
+var
+	list: TList<string>;
+begin
+	list := GetDLLsINI;
+	Result := list.Contains(path);
+	list.Free;
+end;
+
 procedure zyloRuntimeLaunch;
 var
+	list: TList<String>;
 	path: string;
-	init: TIniFile;
 begin
 	ImportMenu := MainForm.MergeFile1;
 	ExportMenu := MainForm.Export1;
 	ImportDialog := TImportDialog.Create(MainForm);
 	ExportDialog := TExportDialog.Create(MainForm);
-	path := ChangeFileExt(Application.ExeName, '.ini');
-	init := TIniFile.Create(path);
-	path := init.ReadString('zylo', 'DLLs', '');
-	for path in path.Split([',']) do TDLL.Create(path);
-	init.Free;
+	list := GetDLLsINI;
+	for path in list do TDLL.Create(path);
+	list.Free;
 end;
 
 procedure zyloRuntimeFinish;
@@ -346,7 +432,7 @@ begin
 		RuleDLL := Rules[link];
 		RuleName := test;
 		RulePath := path;
-	end else
+	end else if link <> '' then
 		MessageDlg(link + ' not installed', mtWarning, [mbOK], 0);
 	list.Free;
 end;
@@ -519,7 +605,10 @@ var
 	hnd: THandle;
 begin
 	hnd := LoadLibrary(PChar(path));
-	if hnd = 0 then Exit;
+	if hnd = 0 then begin
+		DisableDLL(path);
+		Exit;
+	end;
 	AllowInsert := MustGetProc(hnd, 'zylo_allow_insert');
 	AllowDelete := MustGetProc(hnd, 'zylo_allow_delete');
 	AllowUpdate := MustGetProc(hnd, 'zylo_allow_update');

@@ -20,7 +20,7 @@ uses
   UCheckMulti, UCheckCountry, UScratchSheet, UBandScope2, HelperLib,
   UWWMulti, UWWScore, UWWZone, UARRLWMulti, UQTCForm, UzLogQSO, UzLogConst, UzLogSpc,
   UCwMessagePad, UNRDialog, UVoiceForm, UzLogOperatorInfo, UFunctionKeyPanel,
-  UQsyInfo, UserDefinedContest;
+  UQsyInfo, UserDefinedContest, UPluginManager;
 
 const
   WM_ZLOG_INIT = (WM_USER + 100);
@@ -427,8 +427,10 @@ type
     Windows1: TMenuItem;
     Help1: TMenuItem;
     menuAbout: TMenuItem;
-    N3: TMenuItem;
-    HowtoUseHelp1: TMenuItem;
+    HelpZyLO: TMenuItem;
+		N3: TMenuItem;
+    N5: TMenuItem;
+		HowtoUseHelp1: TMenuItem;
     SearchforHelpOn1: TMenuItem;
     Contents1: TMenuItem;
     Score1: TMenuItem;
@@ -701,6 +703,7 @@ type
     menuTargetEditor: TMenuItem;
     actionShowQsyInfo: TAction;
     QSYInfo1: TMenuItem;
+    menuPluginManager: TMenuItem;
     procedure FormCreate(Sender: TObject);
     procedure FormCloseQuery(Sender: TObject; var CanClose: Boolean);
     procedure ShowHint(Sender: TObject);
@@ -764,7 +767,8 @@ type
     procedure Load1Click(Sender: TObject);
     procedure SortbyTime1Click(Sender: TObject);
     procedure menuAboutClick(Sender: TObject);
-    procedure DateEditChange(Sender: TObject);
+    procedure HelpZyLOClick(Sender: TObject);
+		procedure DateEditChange(Sender: TObject);
     procedure TimeEditDblClick(Sender: TObject);
     procedure FormResize(Sender: TObject);
     procedure menuOptionsClick(Sender: TObject);
@@ -927,6 +931,7 @@ type
     procedure actionShowQsoRateExExecute(Sender: TObject);
     procedure menuTargetEditorClick(Sender: TObject);
     procedure actionShowQsyInfoExecute(Sender: TObject);
+    procedure menuPluginManagerClick(Sender: TObject);
   private
     FRigControl: TRigControl;
     FPartialCheck: TPartialCheck;
@@ -954,6 +959,7 @@ type
     FVoiceForm: TVoiceForm;
     FFunctionKeyPanel: TformFunctionKeyPanel;
     FQsyInfoForm: TformQsyInfo;
+    FTTYConsole: TTTYConsole;
 
     FInitialized: Boolean;
 
@@ -1068,6 +1074,7 @@ type
     procedure ShowToggleStatus(text: string; fON: Boolean);
     procedure SetListWidth();
     procedure SelectOperator(O: string);
+    procedure SetEditColor(edit: TEdit; fHighlight: Boolean);
     function ScanNextBand(B0: TBand): TBand;
     function ScanPrevBand(B0: TBand): TBand;
     function IsAvailableBand(B: TBand): Boolean;
@@ -2100,7 +2107,6 @@ begin
    { str := 'zLog for Windows Text File'; }
    WriteLn(f, Header);
    WriteLn(f, 'All times in UTC');
-   WriteLn(f, 'Yohei Yokobayashi AD6AJ/JJ1MED');
    WriteLn(f, '<eoh>');
 
    offsetmin := Log.QsoList[0].RSTsent;
@@ -2292,13 +2298,12 @@ end;
 
 procedure TContest.EditCurrentRow;
 var
-   _top, _row: Integer;
+   R: Integer;
    aQSO: TQSO;
 begin
-   _top := MainForm.Grid.TopRow;
-   _row := MainForm.Grid.Row;
+   R := MainForm.Grid.Row;
 
-   aQSO := TQSO(MainForm.Grid.Objects[0, _row]);
+   aQSO := TQSO(MainForm.Grid.Objects[0, R]);
    if aQSO = nil then begin
       Exit;
    end;
@@ -2310,20 +2315,19 @@ begin
 
    PastEditForm.Init(aQSO, _ActChange);
 
-   if PastEditForm.ShowModal = mrOK then begin
-      if MainForm.FPartialCheck.Visible and MainForm.FPartialCheck._CheckCall then begin
-         MainForm.FPartialCheck.CheckPartial(CurrentQSO);
-      end;
-
-      if MainForm.FCheckCall2.Visible then begin
-         MainForm.FCheckCall2.Renew(CurrentQSO);
-      end;
+   if PastEditForm.ShowModal <> mrOK then begin
+      Exit;
    end;
 
-   MainForm.Grid.TopRow := _top;
-   MainForm.Grid.Row := _row;
+   MainForm.EditScreen.WriteQSO(R, aQSO);
 
-   MainForm.EditScreen.RefreshScreen(False);
+   if MainForm.FPartialCheck.Visible and MainForm.FPartialCheck._CheckCall then begin
+      MainForm.FPartialCheck.CheckPartial(CurrentQSO);
+   end;
+
+   if MainForm.FCheckCall2.Visible then begin
+      MainForm.FCheckCall2.Renew(CurrentQSO);
+   end;
 end;
 
 constructor TJIDXContest.Create(N: string);
@@ -3838,6 +3842,7 @@ begin
    FVoiceForm.OnNotifyFinished := OnVoicePlayFinished;
    FFunctionKeyPanel := TformFunctionKeyPanel.Create(Self);
    FQsyInfoForm   := TformQsyInfo.Create(Self);
+   FTTYConsole    := nil;
 
    FCurrentCQMessageNo := 101;
    FQsyFromBS := False;
@@ -4080,6 +4085,7 @@ begin
    dmZlogGlobal.ReadWindowState(FCwMessagePad);
    dmZlogGlobal.ReadWindowState(FFunctionKeyPanel);
    dmZlogGlobal.ReadWindowState(FQsyInfoForm);
+   dmZlogGlobal.ReadWindowState(FZLinkForm);
 
    for b := Low(FBandScopeEx) to High(FBandScopeEx) do begin
       dmZlogGlobal.ReadWindowState(FBandScopeEx[b], 'BandScope(' + MHzString[b] + ')');
@@ -4111,6 +4117,7 @@ begin
    dmZlogGlobal.WriteWindowState(FCwMessagePad);
    dmZlogGlobal.WriteWindowState(FFunctionKeyPanel);
    dmZlogGlobal.WriteWindowState(FQsyInfoForm);
+   dmZlogGlobal.WriteWindowState(FZLinkForm);
 
    for b := Low(FBandScopeEx) to High(FBandScopeEx) do begin
       dmZlogGlobal.WriteWindowState(FBandScopeEx[b], 'BandScope(' + MHzString[b] + ')');
@@ -4147,6 +4154,11 @@ end;
 procedure TMainForm.HelpAbout(Sender: TObject);
 begin
    menuAbout.Click();
+end;
+
+procedure TMainForm.HelpZyLOClick(Sender: TObject);
+begin
+   UPluginManager.BrowseURL(UPluginManager.URL_MANUAL);
 end;
 
 procedure TMainForm.ConsoleRigBandSet(B: TBand);
@@ -4222,18 +4234,16 @@ begin
    end;
 
    if S = 'T' then begin
-      if TTYConsole <> nil then begin
-         TTYConsole.Show;
+      if FTTYConsole <> nil then begin
+         FTTYConsole.Show;
       end;
    end;
 
    if S = 'MMTTY' then begin
-      mnMMTTY.Tag := 1;
-      mnMMTTY.Caption := 'Exit MMTTY';
-      mnTTYConsole.Visible := True;
-      Application.CreateForm(TTTYConsole, TTYConsole);
-      TTYConsole.SetTTYMode(ttyMMTTY);
-      InitializeMMTTY(Handle);
+      if Not Assigned(FTTYConsole) then begin
+         mnMMTTY.Tag := 0;
+         mnMMTTY.Click();
+      end;
    end;
 
    if S = 'OP' then begin
@@ -4249,9 +4259,10 @@ begin
    end;
 
    if S = 'EXITMMTTY' then begin
-      TTYConsole.close;
-      TTYConsole.Destroy;
-      ExitMMTTY;
+      if Assigned(FTTYConsole) then begin
+         mnMMTTY.Tag := 1;
+         mnMMTTY.Click();
+      end;
    end;
 
    if S = 'MMCLR' then begin
@@ -4488,6 +4499,7 @@ begin
 
    if S = 'CWON' then begin
       dmZLogKeyer.InitializeBGK(dmZlogGlobal.Settings.CW._interval);
+      dmZLogGlobal.InitializeCW();
    end;
 
    i := StrToFloatDef(S, 0);
@@ -4819,6 +4831,12 @@ end;
 procedure TMainForm.NumberEditChange(Sender: TObject);
 begin
    CurrentQSO.NrRcvd := NumberEdit.Text;
+
+   if Assigned(MyContest) then begin
+      if MyContest.MultiForm.IsIncrementalSearchPresent = True then begin
+         MyContest.MultiForm.CheckMulti(CurrentQSO);
+      end;
+   end;
 end;
 
 procedure TMainForm.BandEditClick(Sender: TObject);
@@ -5095,8 +5113,8 @@ begin
    // RTTY
    if Main.CurrentQSO.Mode = mRTTY then begin
       TabPressed := True;
-      if TTYConsole <> nil then
-         TTYConsole.SendStrNow(SetStrNoAbbrev(dmZlogGlobal.CWMessage(3, 2), CurrentQSO));
+      if FTTYConsole <> nil then
+         FTTYConsole.SendStrNow(SetStrNoAbbrev(dmZlogGlobal.CWMessage(3, 2), CurrentQSO));
       MyContest.SpaceBarProc;
       NumberEdit.SetFocus;
       exit;
@@ -5160,7 +5178,7 @@ begin
                   zLogSendStr2(S, CurrentQSO);
                end;
 
-               WriteStatusLine('Invalid Number', False);
+               WriteStatusLine('Invalid number', False);
                NumberEdit.SetFocus;
                NumberEdit.SelectAll;
                exit;
@@ -5177,10 +5195,10 @@ begin
             if Not(MyContest.MultiForm.ValidMulti(CurrentQSO)) then begin
                S := dmZlogGlobal.CWMessage(3, 5);
                S := SetStrNoAbbrev(S, CurrentQSO);
-               if TTYConsole <> nil then begin
-                  TTYConsole.SendStrNow(S);
+               if FTTYConsole <> nil then begin
+                  FTTYConsole.SendStrNow(S);
                end;
-               WriteStatusLine('Invalid Number', False);
+               WriteStatusLine('Invalid number', False);
                NumberEdit.SetFocus;
                NumberEdit.SelectAll;
                exit;
@@ -5189,8 +5207,8 @@ begin
             S := dmZlogGlobal.CWMessage(3, 3);
 
             S := SetStrNoAbbrev(S, CurrentQSO);
-            if TTYConsole <> nil then begin
-               TTYConsole.SendStrNow(S);
+            if FTTYConsole <> nil then begin
+               FTTYConsole.SendStrNow(S);
             end;
 
             LogButtonClick(Self);
@@ -5199,7 +5217,7 @@ begin
       mSSB, mFM, mAM: begin
             if Not(MyContest.MultiForm.ValidMulti(CurrentQSO)) then begin
                PlayMessage(1, 5);
-               WriteStatusLine('Invalid Number', False);
+               WriteStatusLine('Invalid number', False);
                NumberEdit.SetFocus;
                NumberEdit.SelectAll;
                exit;
@@ -5326,7 +5344,7 @@ begin
       else begin  // UNIQUE!
          // –³Œøƒ}ƒ‹ƒ`‚Í“ü—Í‚Å‚«‚È‚¢
          if MyContest.MultiForm.ValidMulti(CurrentQSO) = False then begin
-            WriteStatusLine('Invalid Number', False);
+            WriteStatusLine('Invalid number', False);
             NumberEdit.SetFocus;
             NumberEdit.SelectAll;
             Exit;
@@ -5589,6 +5607,11 @@ begin
    FVoiceForm.Release();
    FFunctionKeyPanel.Release();
    FQsyInfoForm.Release();
+
+   if Assigned(FTTYConsole) then begin
+      FTTYConsole.Release();
+   end;
+
    CurrentQSO.Free();
 
    SuperCheckFreeData();
@@ -5603,8 +5626,10 @@ begin
    dmZLogGlobal.Settings.CW._speed := SpeedBar.Position;
    SpeedLabel.Caption := IntToStr(SpeedBar.Position) + ' wpm';
 
-   if LastFocus <> nil then begin
-      LastFocus.SetFocus;
+   if Active = True then begin
+      if LastFocus <> nil then begin
+         LastFocus.SetFocus;
+      end;
    end;
 end;
 
@@ -5773,6 +5798,9 @@ end;
 
 procedure TMainForm.FormClose(Sender: TObject; var Action: TCloseAction);
 begin
+   FChatForm.RenewOptions();
+   FCommForm.RenewOptions();
+
    Timer1.Enabled := False;
    TerminateNPlusOne();
    TerminateSuperCheckDataLoad();
@@ -6254,6 +6282,10 @@ begin
       // Voice‰Šú‰»
       FVoiceForm.Init();
 
+      // Accessibility
+      EditExit(LastFocus);
+      EditEnter(LastFocus);
+
       LastFocus.SetFocus;
    finally
       f.Release();
@@ -6395,6 +6427,11 @@ begin
    end;
 end;
 
+procedure TMainForm.menuPluginManagerClick(Sender: TObject);
+begin
+	 MarketForm.Show;
+end;
+
 procedure TMainForm.CWFMouseDown(Sender: TObject; Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
 begin
    CWFMenu.Items[0].Tag := THemisphereButton(Sender).Tag;
@@ -6405,6 +6442,9 @@ var
    P: Integer;
 begin
    LastFocus := TEdit(Sender);
+
+   SetEditColor(TEdit(Sender), False);
+
    if TEdit(Sender).Name = 'CallsignEdit' then begin
       P := Pos('.', CallsignEdit.Text);
       if P > 0 then begin
@@ -6419,6 +6459,12 @@ end;
 
 procedure TMainForm.EditExit(Sender: TObject);
 begin
+   with TEdit(Sender) do begin
+      Font.Color := clBlack;
+      Color := clWhite;
+      Font.Style := Font.Style - [fsBold];
+   end;
+
    actionQsoStart.Enabled:= False;
    actionQsoComplete.Enabled:= False;
 end;
@@ -7035,30 +7081,32 @@ begin
       mnMMTTY.Tag := 1;
       mnMMTTY.Caption := 'Exit MMTTY';
       mnTTYConsole.Visible := True;
-      Application.CreateForm(TTTYConsole, TTYConsole);
-      repeat
-      until TTYConsole <> nil;
+
+      FTTYConsole := TTTYConsole.Create(Self);
+      dmZlogGlobal.ReadWindowState(FTTYConsole);
 
       dmZLogKeyer.CloseBGK();
 
-      TTYConsole.SetTTYMode(ttyMMTTY);
+      FTTYConsole.SetTTYMode(ttyMMTTY);
       InitializeMMTTY(Handle);
-      TTYConsole.Show;
-      TTYConsole.SetFocus;
-      exit;
+
+      FTTYConsole.Show;
+      FTTYConsole.SetFocus;
    end
    else begin
       mnMMTTY.Tag := 0;
       mnMMTTY.Caption := 'Load MMTTY';
       mnTTYConsole.Visible := False;
-      TTYConsole.close;
-      TTYConsole.Destroy;
+
+      dmZlogGlobal.WriteWindowState(FTTYConsole);
+
+      FTTYConsole.Close();
+      FTTYConsole.Release();
+
       ExitMMTTY;
 
       dmZLogKeyer.InitializeBGK(dmZlogGlobal.Settings.CW._interval);
       dmZLogGlobal.InitializeCW();
-
-      exit;
    end;
 end;
 
@@ -7146,8 +7194,8 @@ begin
    end;
 
    if CurrentQSO.Mode = mRTTY then begin
-      if TTYConsole <> nil then begin
-         if TTYConsole.Sending = False then begin
+      if FTTYConsole <> nil then begin
+         if FTTYConsole.Sending = False then begin
             TabPressed := False;
          end;
       end;
@@ -8058,7 +8106,7 @@ procedure TMainForm.PlayMessageRTTY(no: Integer);
 var
    S: string;
 begin
-   if TTYConsole = nil then begin
+   if FTTYConsole = nil then begin
       Exit;
    end;
 
@@ -8069,7 +8117,7 @@ begin
    end;
 
    S := SetStrNoAbbrev(S, CurrentQSO);
-   TTYConsole.SendStrNow(S);
+   FTTYConsole.SendStrNow(S);
 end;
 
 procedure TMainForm.OnVoicePlayStarted(Sender: TObject);
@@ -8689,8 +8737,8 @@ end;
 // #74 Teletype Console
 procedure TMainForm.actionShowTeletypeConsoleExecute(Sender: TObject);
 begin
-   if Assigned(TTYConsole) then begin
-      TTYConsole.Show;
+   if Assigned(FTTYConsole) then begin
+      FTTYConsole.Show;
    end;
 end;
 
@@ -9579,13 +9627,7 @@ end;
 
 procedure TMainForm.HighlightCallsign(fHighlight: Boolean);
 begin
-   if (dmZlogGlobal.Settings.FSuperCheck.FFullMatchHighlight = True) and
-      (fHighlight = True) then begin
-      CallsignEdit.Color := dmZlogGlobal.Settings.FSuperCheck.FFullMatchColor;
-   end
-   else begin
-      CallsignEdit.Color := clWindow;
-   end;
+   SetEditColor(CallsignEdit, fHighlight);
 end;
 
 procedure TMainForm.BandScopeNotifyWorked(aQSO: TQSO);
@@ -9891,5 +9933,25 @@ begin
    FVoiceForm.SetOperator(op);
 end;
 
-end.
+procedure TMainForm.SetEditColor(edit: TEdit; fHighlight: Boolean);
+begin
+   with edit do begin
+      if (dmZlogGlobal.Settings.FSuperCheck.FFullMatchHighlight = True) and
+         (fHighlight = True) then begin
+         Color := dmZlogGlobal.Settings.FSuperCheck.FFullMatchColor;
+      end
+      else begin
+         Color := dmZLogGlobal.Settings.FAccessibility.FFocusedBackColor;
+      end;
 
+      Font.Color := dmZLogGlobal.Settings.FAccessibility.FFocusedForeColor;
+      if dmZLogGlobal.Settings.FAccessibility.FFocusedBold = True then begin
+         Font.Style := Font.Style + [fsBold];
+      end
+      else begin
+         Font.Style := Font.Style - [fsBold];
+      end;
+   end;
+end;
+
+end.
