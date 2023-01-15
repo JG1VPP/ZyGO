@@ -1,8 +1,3 @@
-{*******************************************************************************
- * Amateur Radio Operational Logging Software 'ZyLO' since 2020 June 22
- * License: The MIT License since 2021 October 28 (see LICENSE)
- * Author: Journal of Hamradio Informatics (http://pafelog.net)
-*******************************************************************************}
 unit UPluginManager;
 
 interface
@@ -88,6 +83,7 @@ type
 		InstallButton: TButton;
 		DisableButton: TButton;
 		UpgradeButton: TButton;
+		procedure Browse(name: string);
 		procedure FormCreate(Sender: TObject);
 		procedure FormShow(Sender: TObject);
 		procedure LoadText(url: string; var txt: string);
@@ -110,8 +106,8 @@ var
 	MarketList: TMarketList;
 
 const
-	URL_MARKET = 'https://zylo.pafelog.net/market.json';
-	URL_MANUAL = 'https://zylo.pafelog.net';
+	URL_MARKET = 'https://pkg.zlog.org/market.json';
+	URL_MANUAL = 'https://nextzlog.github.io/zylo';
 
 resourcestring
 	UPluginManager_Installed_Plugins_Disabled = 'Installed plugins will be disabled. Are you sure?';
@@ -135,6 +131,7 @@ var
 begin
 	for Item In MarketList do
 		Item.Free;
+	MarketDict.Clear;
 	MarketList.Clear;
 end;
 
@@ -213,9 +210,7 @@ begin
 	if isDAT then Result := dmZLogGlobal.Settings._cfgdatpath;
 end;
 begin
-	Result := TPath.GetFileName(url);
-	if isCFG then Result := TPath.Combine(dir, Result);
-	if isDAT then Result := TPath.Combine(dir, Result);
+	Result := TPath.Combine(dir, TPath.GetFileName(url));
 end;
 
 constructor TMarketItem.Create;
@@ -381,6 +376,14 @@ begin
 	for Item in Self.use do list.Add(MarketDict[Item]);
 	Result := list.ToArray;
 	list.Free;
+end;
+
+procedure TMarketForm.Browse(name: string);
+begin
+	Show;
+	for var Item in MarketList do
+		if TPath.GetFileName(Item.ref) = name then
+			ListBox.Selected[MarketList.IndexOf(Item)] := true;
 end;
 
 procedure TMarketForm.FormCreate(Sender: TObject);
